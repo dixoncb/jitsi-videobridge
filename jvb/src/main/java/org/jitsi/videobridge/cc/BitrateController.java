@@ -173,14 +173,14 @@ public class BitrateController
      * The default video constraints to use for endpoints without video
      * constraints.
      */
-    private static final VideoConstraints defaultVideoConstraints
-        = new VideoConstraints(Config.thumbnailMaxHeightPx());
+    private static final VideoSetup defaultVideoSetup
+        = new VideoSetup(VideoPolicy.empty, VideoConstraints.thumbnail);
 
     /**
      * The map of endpoint id to video constraints that contains the video
      * constraints to respect when allocating bandwidth for a specific endpoint.
      */
-    private ImmutableMap<String, VideoConstraints> videoConstraintsMap = ImmutableMap.of();
+    private ImmutableMap<String, VideoSetup> videoSetupImmutableMap = ImmutableMap.of();
 
     /**
      * The last-n value for the endpoint to which this {@link BitrateController}
@@ -274,9 +274,9 @@ public class BitrateController
      * video constraints to follow when allocating bandwidth for a specific
      * endpoint.
      */
-    public ImmutableMap<String, VideoConstraints> getVideoConstraints()
+    public ImmutableMap<String, VideoSetup> getVideoSetupMap()
     {
-        return videoConstraintsMap;
+        return videoSetupImmutableMap;
     }
 
     /**
@@ -297,7 +297,7 @@ public class BitrateController
         /**
          * The video constraints of the {@link #endpoint}.
          */
-        final VideoConstraints videoConstraints;
+        final VideoSetup videoSetup;
 
         /**
          * The endpoint (sender) that's constrained and is ranked for bandwidth
@@ -309,13 +309,13 @@ public class BitrateController
          * Ctor.
          *
          * @param speakerRank
-         * @param videoConstraints
+         * @param videoSetup
          * @param endpoint
          */
-        EndpointMultiRank(int speakerRank, VideoConstraints videoConstraints, AbstractEndpoint endpoint)
+        EndpointMultiRank(int speakerRank, VideoSetup videoSetup, AbstractEndpoint endpoint)
         {
             this.speakerRank = speakerRank;
-            this.videoConstraints = videoConstraints;
+            this.videoSetup = videoSetup;
             this.endpoint = endpoint;
         }
     }
@@ -345,18 +345,19 @@ public class BitrateController
             // We want "o1 has higher preferred height than o2" to imply "o1 is
             // smaller than o2" as this is equivalent to "o1 needs to be
             // prioritized first".
-            int preferredHeightDiff =
-                o2.videoConstraints.getPreferredHeight() - o1.videoConstraints.getPreferredHeight();
-            if (preferredHeightDiff != 0)
+            int greedyHeightAllocationUpperBoundDiff =
+                o2.videoSetup.policy.getGreedyHeightAllocationUpperBound() - o1.videoSetup.policy.getGreedyHeightAllocationUpperBound();
+
+            if (greedyHeightAllocationUpperBoundDiff != 0)
             {
-                return preferredHeightDiff;
+                return greedyHeightAllocationUpperBoundDiff;
             }
             else
             {
                 // We want "o1 has higher ideal height than o2" to imply "o1 is
                 // smaller than o2" as this is equivalent to "o1 needs to be
                 // prioritized first".
-                int idealHeightDiff = o2.videoConstraints.getIdealHeight() - o1.videoConstraints.getIdealHeight();
+                int idealHeightDiff = o2.videoSetup.constraints.getIdealHeight() - o1.videoSetup.constraints.getIdealHeight();
                 if (idealHeightDiff != 0)
                 {
                     return idealHeightDiff;
@@ -457,7 +458,7 @@ public class BitrateController
         debugState.put("forwardedEndpoints", forwardedEndpointIds.toString());
         debugState.put("trustBwe", Config.trustBwe());
         debugState.put("lastBwe", lastBwe);
-        debugState.put("videoConstraints", videoConstraintsMap);
+        debugState.put("videoSetupMap", videoSetupImmutableMap);
         debugState.put("lastN", lastN);
         debugState.put("supportsRtx", supportsRtx);
         JSONObject adaptiveSourceProjectionsJson = new JSONObject();
@@ -747,8 +748,8 @@ public class BitrateController
                             .addField("target_idx", sourceTargetIdx)
                             .addField("ideal_idx", sourceIdealIdx)
                             .addField("target_bps", sourceTargetBps)
-                            .addField("videoConstraints",
-                                sourceBitrateAllocation.videoConstraints)
+                            .addField("videoSetup",
+                                sourceBitrateAllocation.videoSetup)
                             .addField("oversending",
                                 sourceBitrateAllocation.oversending)
                             .addField("preferred_idx",
@@ -1008,24 +1009,25 @@ public class BitrateController
             // of the conference.
             adjustedLastN = Math.min(lastN, conferenceEndpoints.size() - 1);
         }
+
+        Map<String, VideoSetup> copyOfVideoSetupMap = videoSetupImmutableMap;
+
         if (logger.isDebugEnabled())
         {
             logger.debug("Prioritizing endpoints, adjusted last-n: " + adjustedLastN +
                 ", sorted endpoint list: " +
                 conferenceEndpoints.stream().map(AbstractEndpoint::getID).collect(Collectors.joining(", ")) +
-                ". Endpoints constraints: " + Arrays.toString(videoConstraintsMap.values().toArray()));
+                ". Endpoints setup: " + Arrays.toString(copyOfVideoSetupMap.values().toArray()));
         }
-
-        Map<String, VideoConstraints> videoConstraintsMapCopy = videoConstraintsMap;
 
         List<EndpointMultiRank> endpointMultiRankList = conferenceEndpoints
             .stream()
             .map(endpoint -> {
-                VideoConstraints videoConstraints = videoConstraintsMapCopy
-                    .getOrDefault(endpoint.getID(), defaultVideoConstraints);
+                VideoSetup videoSetup = copyOfVideoSetupMap
+                    .getOrDefault(endpoint.getID(), defaultVideoSetup);
 
                 int rank = conferenceEndpoints.indexOf(endpoint);
-                return new EndpointMultiRank(rank, videoConstraints, endpoint);
+                return new EndpointMultiRank(rank, videoSetup, endpoint);
             })
             .sorted(new EndpointMultiRanker())
             .collect(Collectors.toList());
@@ -1051,7 +1053,7 @@ public class BitrateController
                     sourceBitrateAllocations.add(
                         new SourceBitrateAllocation(
                             endpointMultiRank.endpoint.getID(),
-                            source, endpointMultiRank.videoConstraints, forwarded));
+                            source, endpointMultiRank.videoSetup, forwarded));
 
                 }
 
@@ -1063,11 +1065,11 @@ public class BitrateController
         return sourceBitrateAllocations.toArray(new SourceBitrateAllocation[0]);
     }
 
-    public void setVideoConstraints(ImmutableMap<String, VideoConstraints> newVideoConstraintsMap)
+    public void setVideoSetupMap(ImmutableMap<String, VideoSetup> newVideoSetupMap)
     {
-        if (!this.videoConstraintsMap.equals(newVideoConstraintsMap))
+        if (!this.videoSetupImmutableMap.equals(newVideoSetupMap))
         {
-            this.videoConstraintsMap = newVideoConstraintsMap;
+            this.videoSetupImmutableMap = newVideoSetupMap;
             update();
         }
     }
@@ -1208,7 +1210,7 @@ public class BitrateController
          * Indicates whether this {@link Endpoint} is on-stage/selected or not
          * at the {@link Endpoint} that owns this {@link BitrateController}.
          */
-        private final VideoConstraints videoConstraints;
+        private final VideoSetup videoSetup;
 
         /**
          * Helper field that keeps the SSRC of the target stream.
@@ -1276,11 +1278,11 @@ public class BitrateController
         private SourceBitrateAllocation(
             String endpointID,
             MediaSourceDesc source,
-            VideoConstraints videoConstraints,
+            VideoSetup videoSetup,
             boolean fitsInLastN)
         {
             this.endpointID = endpointID;
-            this.videoConstraints = videoConstraints;
+            this.videoSetup = videoSetup;
             this.fitsInLastN = fitsInLastN;
             this.source = source;
 
@@ -1312,59 +1314,36 @@ public class BitrateController
             long idealBps = 0;
             for (RtpLayerDesc layer : source.getRtpLayers())
             {
-
-                int idealHeight = videoConstraints.getIdealHeight();
                 // We don't want to exceed the ideal resolution but we also
                 // want to make sure we have at least 1 rated encoding.
-                if (idealHeight >= 0 && layer.getHeight() > idealHeight
-                    && !ratesList.isEmpty())
-                {
-                    continue;
-                }
-
-                // For the "selected" participant we favor frame rate over
-                // resolution. We include all temporal layers up to the
-                // preferred resolution, but only consider the preferred
-                // frame-rate with higher-than-preferred resolutions. In
-                // practice today this translates to 180p7.5fps, 180p15fps,
-                // 180p30fps, 360p30fps and 720p30fps.
-
-                boolean lessThanPreferredResolution
-                    = layer.getHeight() < videoConstraints.getPreferredHeight();
-                boolean lessThanOrEqualIdealResolution
-                    = layer.getHeight() <= videoConstraints.getIdealHeight();
-                boolean atLeastPreferredFps
-                    = layer.getFrameRate() >= videoConstraints.getPreferredFps();
-
-                if ((lessThanPreferredResolution
-                    || (lessThanOrEqualIdealResolution && atLeastPreferredFps))
-                    || ratesList.isEmpty())
+                VideoSetup.RtpLayerMatcher m = videoSetup.makeRtpLayerMatcher(layer);
+                if (m.matches() || ratesList.isEmpty())
                 {
                     long layerBitrateBps = layer.getBitrateBps(nowMs);
                     if (layerBitrateBps > 0)
                     {
                         idealBps = layerBitrateBps;
                     }
-                    ratesList.add(
-                        new RateSnapshot(layerBitrateBps, layer));
-                }
 
-                if (layer.getHeight() <= videoConstraints.getPreferredHeight())
-                {
-                    // The improve step below will "eagerly" try to allocate
-                    // up-to the ratedPreferredIdx before moving on to the next
-                    // track. Eagerly means we consume all available bandwidth
-                    // up to the preferred resolution, leaving higher-frame
-                    // rates as an option for subsequent improvement steps.
-                    //
-                    // NOTE that the above comment suggests that the prefix
-                    // "preferred" in the preferredFps and preferredHeight
-                    // params has different semantics: In the preferredHeight
-                    // param it means "eagerly allocate up to the preferred
-                    // resolution" whereas in the preferredFps param it means
-                    // "only consider encodings with at least preferredFps" once
-                    // we've reached the preferredHeight.
-                    ratedPreferredIdx = ratesList.size() - 1;
+                    ratesList.add(new RateSnapshot(layerBitrateBps, layer));
+
+                    if (m.shouldDoGreedyAllocation())
+                    {
+                        // The improve step below will "eagerly" try to allocate
+                        // up-to the ratedPreferredIdx before moving on to the next
+                        // track. Eagerly means we consume all available bandwidth
+                        // up to the preferred resolution, leaving higher-frame
+                        // rates as an option for subsequent improvement steps.
+                        //
+                        // NOTE that the above comment suggests that the prefix
+                        // "preferred" in the preferredFps and preferredHeight
+                        // params has different semantics: In the preferredHeight
+                        // param it means "eagerly allocate up to the preferred
+                        // resolution" whereas in the preferredFps param it means
+                        // "only consider encodings with at least preferredFps" once
+                        // we've reached the preferredHeight.
+                        ratedPreferredIdx = ratesList.size() - 1;
+                    }
                 }
             }
             
