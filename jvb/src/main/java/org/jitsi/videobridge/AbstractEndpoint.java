@@ -423,9 +423,17 @@ public abstract class AbstractEndpoint
         VideoConstraints oldVideoConstraints = receiverVideoConstraintsMap.put(receiverId, newVideoConstraints);
         if (oldVideoConstraints == null || !oldVideoConstraints.equals(newVideoConstraints))
         {
-            logger.debug(
-                () -> "Changed receiver constraints: " + receiverId + ": " + newVideoConstraints.getIdealHeight());
+            logger.warn(
+                    () -> " ~*~ + Changed receiver constraints: " + receiverId + ": " + newVideoConstraints.getIdealHeight());
+           // logger.debug(
+            //    () -> "Changed receiver constraints: " + receiverId + ": " + newVideoConstraints.getIdealHeight());
             receiverVideoConstraintsChanged(receiverVideoConstraintsMap.values());
+        }
+        else
+        {
+            String c1 = (oldVideoConstraints == null) ? " oldVideoContraints are null ": " oldVideoConstraints are not null";
+            String c2 = (oldVideoConstraints.equals(newVideoConstraints)) ? " videoConstraints has changed": " videoConstraints has not changed";
+            logger.warn(() -> "~*~ 1. Problem in AbstractEndpoint::addReceiver for added receiver " + receiverId + " from send list of " + this.getID() +  c1 + c2);
         }
     }
 
@@ -440,7 +448,8 @@ public abstract class AbstractEndpoint
     {
         if (receiverVideoConstraintsMap.remove(receiverId) != null)
         {
-            logger.debug(() -> "Removed receiver " + receiverId);
+            logger.warn(() -> "~*~ Removed receiver " + receiverId + " from send list of " + this.getID());
+           // logger.debug(() -> "Removed receiver " + receiverId);
             receiverVideoConstraintsChanged(receiverVideoConstraintsMap.values());
         }
     }

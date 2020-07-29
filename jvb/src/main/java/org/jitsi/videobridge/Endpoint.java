@@ -616,6 +616,18 @@ public class Endpoint
     @Override
     public void setSenderVideoConstraints(ImmutableMap<String, VideoConstraints> newVideoConstraints)
     {
+        logger.warn("~*~ Endpoint::setSenderVideoConstraints enter for " + this.getID());
+
+        // -- Fiddle block
+        String c_rep = "";
+        List<AbstractEndpoint> c_pts = getConference().getEndpoints();
+        for (int i = 0; i< c_pts.size(); i++){
+            AbstractEndpoint ap = c_pts.get(i);
+            c_rep = c_rep + " ~~ " + ap.getID();
+        }
+        logger.warn("~*~ existing current conference endpoints for " + this.getID() + " are " + c_rep);
+        // -- End Fiddle block
+
         ImmutableMap<String, VideoConstraints> oldVideoConstraints = bitrateController.getVideoConstraints();
 
         bitrateController.setVideoConstraints(newVideoConstraints);
@@ -630,6 +642,7 @@ public class Endpoint
             if (senderEndpoint != null)
             {
                 senderEndpoint.removeReceiver(getID());
+                logger.warn("~*~ Tell sender  " + senderEndpoint.getID() + " to remove me,  " + this.getID());
             }
         }
 
@@ -641,6 +654,7 @@ public class Endpoint
             if (senderEndpoint != null)
             {
                 senderEndpoint.addReceiver(getID(), videoConstraintsEntry.getValue());
+                logger.warn("~*~ Tell sender  " + senderEndpoint.getID() + " to add me,  " + this.getID());
             }
         }
     }

@@ -1065,11 +1065,15 @@ public class BitrateController
 
     public void setVideoConstraints(ImmutableMap<String, VideoConstraints> newVideoConstraintsMap)
     {
+        logger.warn("~*~ BitrateContoller::setVideoConstraints for " + this.destinationEndpoint.getID());
         if (!this.videoConstraintsMap.equals(newVideoConstraintsMap))
         {
+            logger.warn("~*~ new videoConstraintsMap " + this.destinationEndpoint.getID());
             this.videoConstraintsMap = newVideoConstraintsMap;
             update();
         }
+
+        logger.warn("~*~ BitrateContoller::setVideoConstraints exit for" + this.destinationEndpoint.getID());
     }
 
     /**

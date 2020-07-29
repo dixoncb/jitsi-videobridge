@@ -256,6 +256,8 @@ public class Videobridge
                 + " gid=" + conference.getGid()
                 + " logging=" + enableLogging);
 
+        logger.info(() -> "~*~ ===================== FIDDLE BRANCH =====================");
+
         return conference;
     }
 

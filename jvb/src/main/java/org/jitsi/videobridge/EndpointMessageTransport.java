@@ -421,6 +421,8 @@ class EndpointMessageTransport
     @Override
     public BridgeChannelMessage pinnedEndpoints(PinnedEndpointsMessage message)
     {
+        logger.warn("~*~ EndpointMessageTransport::pinedEndpoints enter for " + this.endpoint.getID());
+
         Set<String> newPinnedEndpoints = new HashSet<>(message.getPinnedEndpoints());
 
         if (logger.isDebugEnabled())
@@ -430,6 +432,8 @@ class EndpointMessageTransport
 
         videoConstraintsCompatibility.setPinnedEndpoints(newPinnedEndpoints);
         setSenderVideoConstraints(videoConstraintsCompatibility.computeVideoConstraints());
+
+        logger.warn("~*~ EndpointMessageTransport::pinedEndpoints exit for " + this.endpoint.getID());
 
         return null;
     }
