@@ -629,7 +629,8 @@ public class BitrateController
         }
         else
         {
-            logger.debug(() -> "new bandwidth is " + newBandwidthBps + ", updating");
+            logger.warn(() -> " ~*~ new bandwidth for " + this.destinationEndpoint.getID() + "is " + newBandwidthBps + ", updating");
+          // logger.debug(() -> "new bandwidth is " + newBandwidthBps + ", updating");
 
             lastBwe = newBandwidthBps;
             update();
@@ -649,7 +650,8 @@ public class BitrateController
      */
     public synchronized void endpointOrderingChanged(List<String> conferenceEndpoints)
     {
-        logger.debug(() -> " endpoint ordering has changed, updating");
+        logger.warn(() -> " ~*~ endpoint ordering has changed for " + this.destinationEndpoint.getID() + ", updating");
+      //  logger.debug(() -> " endpoint ordering has changed, updating");
 
         sortedEndpointIds = conferenceEndpoints;
         update();
@@ -662,6 +664,11 @@ public class BitrateController
      */
     private synchronized void update()
     {
+        //Fiddle --------------------------
+        String cd_id = this.destinationEndpoint.getID();
+        logger.warn(() -> " ~*~ BitrateController::update " + cd_id);
+
+
         long nowMs = System.currentTimeMillis();
 
         long bweBps = getAvailableBandwidth(nowMs);
@@ -804,6 +811,15 @@ public class BitrateController
         this.adaptiveSourceProjections
             = Collections.unmodifiableList(adaptiveSourceProjections);
 
+        //Fiddle --------------------------
+        String rep = "";
+        for (int i=0; i<this.adaptiveSourceProjections.size();i++){
+            AdaptiveSourceProjection a = this.adaptiveSourceProjections.get(i);
+            rep += " ~~ " + "[ideal= " + a.getIdealIndex()+ ", target = " + a.getTargetIndex()+ "], ";
+        }
+
+        logger.warn( " ~*~ adaptivesourceprojections for " + cd_id + " = " + rep);
+
         if (!newForwardedEndpointIds.equals(oldForwardedEndpointIds))
         {
             // TODO(george) bring back sending this message on message transport
@@ -815,6 +831,15 @@ public class BitrateController
         }
 
         this.forwardedEndpointIds = newForwardedEndpointIds;
+        //Fiddle --------------------------
+        String rep1 = "";
+        Iterator<String> i = this.forwardedEndpointIds.iterator();
+        while (i.hasNext()){
+            rep1 += " ~~ " + i.next();
+        }
+
+        logger.warn(" ~*~ new forwardedEndpointIds for " + cd_id + " = " + rep1);
+
     }
 
     /**
@@ -1084,7 +1109,8 @@ public class BitrateController
         if (this.lastN != lastN) {
             this.lastN = lastN;
 
-            logger.debug(() -> destinationEndpoint.getID() + " lastN has changed, updating");
+            logger.warn(() -> "~*~ "  + destinationEndpoint.getID() + " lastN has changed to " + lastN + ", updating");
+           // logger.debug(() -> destinationEndpoint.getID() + " lastN has changed, updating");
 
             update();
         }
